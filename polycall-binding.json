@@ -1,0 +1,11 @@
+{
+  "name": "prolog-polycall",
+  "version": "1.5.0",
+  "language": "Prolog",
+  "adapter": true,
+  "ffi": true,
+  "config": "prolog-polycallrc",
+  "core": "../../src",
+  "license": "MIT OBINexus",
+  "author": "Nnamdi Michael Okpala"
+}
