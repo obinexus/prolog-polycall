@@ -89,6 +89,11 @@ Add that directory to SWI-Prolog's `foreign` search path when running:
 swipl -p foreign=lib -s examples/basic.pl -- prolog-polycallrc
 ```
 
+On Windows, the Makefile links directly with GCC instead of `swipl-ld` because
+the latter can split an installation path containing `Program Files`. It uses
+`C:/PROGRA~1/swipl` by default; override `SWI_HOME` if SWI-Prolog is installed
+elsewhere.
+
 ## JavaScript build-tool entry point
 
 ```js

@@ -7,6 +7,7 @@ CPPFLAGS ?=
 CPPFLAGS += -Iinclude -Igenerated
 CFLAGS ?= -O2
 CFLAGS += -std=c11 -Wall -Wextra -Wpedantic
+FOREIGN_CFLAGS := $(filter-out -Wpedantic,$(CFLAGS))
 POLYCALL_LDFLAGS ?=
 
 BUILD_DIR := build
@@ -17,12 +18,18 @@ NATIVE_TEST_BIN := $(BUILD_DIR)/prolog_polycall_adapter_test
 
 ifeq ($(OS),Windows_NT)
 EXE_EXT := .exe
+FOREIGN_EXT := .dll
+SWI_HOME ?= C:/PROGRA~1/swipl
+SWI_INCLUDE ?= $(SWI_HOME)/include
+SWI_LIB_DIR ?= $(SWI_HOME)/bin
 SWIPL_PATH := $(shell where $(SWIPL) 2>nul)
-SWIPL_LD_PATH := $(shell where $(SWIPL_LD) 2>nul)
+PROLOG_TOOLS_AVAILABLE := $(strip $(SWIPL_PATH))
 else
 EXE_EXT :=
+FOREIGN_EXT := .so
 SWIPL_PATH := $(shell command -v $(SWIPL) 2>/dev/null)
 SWIPL_LD_PATH := $(shell command -v $(SWIPL_LD) 2>/dev/null)
+PROLOG_TOOLS_AVAILABLE := $(and $(strip $(SWIPL_PATH)),$(strip $(SWIPL_LD_PATH)))
 endif
 
 NATIVE_TEST_BIN := $(NATIVE_TEST_BIN)$(EXE_EXT)
@@ -59,19 +66,33 @@ ifeq ($(OS),Windows_NT)
 else
 	@test -n "$(POLYCALL_LDFLAGS)" || (echo "Set POLYCALL_LDFLAGS to the libpolycall linker flags" && exit 2)
 endif
+ifeq ($(OS),Windows_NT)
+	$(CC) $(CPPFLAGS) -I"$(SWI_INCLUDE)" $(FOREIGN_CFLAGS) -shared \
+		src/prolog_polycall_foreign.c src/prolog_polycall.c \
+		-L"$(SWI_LIB_DIR)" -lswipl $(POLYCALL_LDFLAGS) \
+		-o $(LIB_DIR)/prolog_polycall$(FOREIGN_EXT)
+else
 	$(SWIPL_LD) -shared -o $(LIB_DIR)/prolog_polycall $(CPPFLAGS) \
 		src/prolog_polycall_foreign.c src/prolog_polycall.c $(POLYCALL_LDFLAGS)
+endif
 
 .PHONY: test-prolog
 test-prolog: | $(BUILD_DIR)
+ifeq ($(OS),Windows_NT)
+	$(CC) $(CPPFLAGS) -Itests -I"$(SWI_INCLUDE)" $(FOREIGN_CFLAGS) -shared \
+		src/prolog_polycall_foreign.c src/prolog_polycall.c \
+		tests/polycall_ffi_mock.c -L"$(SWI_LIB_DIR)" -lswipl \
+		-o $(BUILD_DIR)/prolog_polycall$(FOREIGN_EXT)
+else
 	$(SWIPL_LD) -shared -o $(BUILD_DIR)/prolog_polycall $(CPPFLAGS) -Itests \
 		src/prolog_polycall_foreign.c src/prolog_polycall.c \
 		tests/polycall_ffi_mock.c
+endif
 	$(SWIPL) -q -p foreign=$(BUILD_DIR) -s tests/prolog_polycall_tests.pl \
 		-g run_tests -t halt
 
 .PHONY: test-prolog-if-available
-ifneq ($(and $(strip $(SWIPL_PATH)),$(strip $(SWIPL_LD_PATH))),)
+ifneq ($(PROLOG_TOOLS_AVAILABLE),)
 test-prolog-if-available: test-prolog
 else
 test-prolog-if-available:

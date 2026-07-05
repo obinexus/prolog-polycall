@@ -26,7 +26,7 @@ install_t install(void) {
         "prolog_polycall",
         "run_config_native",
         2,
-        run_config_native,
+        (pl_function_t)run_config_native,
         0
     );
 }
