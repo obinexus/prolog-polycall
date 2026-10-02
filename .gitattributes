@@ -1,0 +1,10 @@
+# Store and check out every text file with LF. Without this, a Windows
+# checkout (core.autocrlf=true) writes CRLF, and `npm pack` / `gem build` /
+# `luarocks pack` run there ship CRLF shebang scripts and shell scripts that
+# do not run on Linux or macOS.
+* text=auto eol=lf
+*.png binary
+*.gz binary
+*.so binary
+*.dll binary
+*.dylib binary
