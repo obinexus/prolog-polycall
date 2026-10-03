@@ -2,7 +2,7 @@
 
 - `run-real-core.sh` — the real-core runner. Sources `real-core-env.sh`
   (locates the installed core, builds the loader-failure fixtures, starts a
-  `polycall start` runtime, sets a random `POLYCALL_DEV_TOKEN`), runs `make`,
+  `polycall start` runtime and a `polycall daemon` on ephemeral ports, sets a random `POLYCALL_DEV_TOKEN`), runs `make`,
   builds a second copy without RUNPATH (for the "core missing" check) and
   runs PlUnit (`run_polycall_tests`, exit 1 on any failure). Exit 77 =
   SKIPPED (no swipl / make / pkg-config / core), never success.
