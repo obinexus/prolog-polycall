@@ -1,8 +1,10 @@
-# prolog-polycallrc - read-only Prolog runtime overrides for libpolycall
+# prolog-polycallrc - SWI-Prolog runtime overrides for libpolycall
 #
-# This file uses the SHARED polycall schema (src/config/polycall_config_schema.c).
-# It introduces no new keys or parser: the Prolog adapter passes this path to
-# the core via the FFI boundary. Values here override polycallrc for Prolog.
+# Grammar: the core's legacy key=value configuration grammar, exactly as
+# `polycall config validate prolog-polycallrc` and polycall_ffi_run_config()
+# read it (see polycall docs/BINDING_ABI.md). This binding introduces no keys
+# and no parser of its own: run_config/2 passes this path to the core.
+# Strict validation (run=1) rejects unknown keys and tls_enabled=true.
 
 log_level=info
 max_connections=1000

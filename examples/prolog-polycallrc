@@ -1,4 +1,5 @@
-# Example Prolog runtime override
+# Example Prolog runtime override (validated by polycall_ffi_run_config /
+# `polycall config validate`; see prolog-polycallrc for the grammar note).
 log_level=debug
 max_connections=128
 network_timeout=2000

@@ -1,119 +1,67 @@
-CC ?= gcc
-AR ?= ar
+# prolog-polycall -- SWI-Prolog foreign library over the Polycall binding ABI v1.
+#
+#   make          build lib/prolog_polycall$(SOEXT) (load with swipl -p foreign=lib)
+#   make test     run the PlUnit suite against the real core (tests/run-real-core.sh)
+#   make clean
+#
+# The core is found through pkg-config (polycall.pc; set PKG_CONFIG_PATH for
+# a non-system prefix), SWI-Prolog through `swipl --dump-runtime-variables`.
+# Override POLYCALL_CFLAGS / POLYCALL_LIBS / SWI_CFLAGS if needed.
+
+VERSION := 1.1.0
+comma := ,
+CC ?= cc
+PKG_CONFIG ?= pkg-config
 SWIPL ?= swipl
-SWIPL_LD ?= swipl-ld
 
-CPPFLAGS ?=
-CPPFLAGS += -Iinclude -Igenerated
-CFLAGS ?= -O2
-CFLAGS += -std=c11 -Wall -Wextra -Wpedantic
-FOREIGN_CFLAGS := $(filter-out -Wpedantic,$(CFLAGS))
-POLYCALL_LDFLAGS ?=
+PLBASE := $(shell $(SWIPL) --dump-runtime-variables 2>/dev/null | sed -n 's/^PLBASE="\(.*\)";$$/\1/p')
+SOEXT := $(or $(shell $(SWIPL) --dump-runtime-variables 2>/dev/null | sed -n 's/^PLSOEXT="\(.*\)";$$/\1/p'),so)
+SWI_CFLAGS ?= -I$(PLBASE)/include
 
-BUILD_DIR := build
-LIB_DIR := lib
-ADAPTER_OBJ := $(BUILD_DIR)/prolog_polycall.o
-STATIC_LIB := $(LIB_DIR)/libprolog_polycall.a
-NATIVE_TEST_BIN := $(BUILD_DIR)/prolog_polycall_adapter_test
+POLYCALL_CFLAGS ?= $(shell $(PKG_CONFIG) --cflags polycall)
+POLYCALL_LIBS ?= $(shell $(PKG_CONFIG) --libs polycall)
+POLYCALL_LIBDIR ?= $(shell $(PKG_CONFIG) --variable=libdir polycall)
 
+CFLAGS ?= -O2 -g
+WARN := -std=c11 -Wall -Wextra
+
+UNAME_S := $(shell uname -s 2>/dev/null)
 ifeq ($(OS),Windows_NT)
-EXE_EXT := .exe
-FOREIGN_EXT := .dll
-SWI_HOME ?= C:/PROGRA~1/swipl
-SWI_INCLUDE ?= $(SWI_HOME)/include
-SWI_LIB_DIR ?= $(SWI_HOME)/bin
-SWIPL_PATH := $(shell where $(SWIPL) 2>nul)
-PROLOG_TOOLS_AVAILABLE := $(strip $(SWIPL_PATH))
+PIC :=
+SHARED := -shared
+# Windows foreign libraries must link libswipl explicitly
+LINK_EXTRA := -L$(PLBASE)/bin -lswipl
+else ifeq ($(UNAME_S),Darwin)
+PIC := -fPIC
+SHARED := -bundle -undefined dynamic_lookup
+LINK_EXTRA := $(if $(POLYCALL_LIBDIR),-Wl$(comma)-rpath$(comma)$(POLYCALL_LIBDIR))
 else
-EXE_EXT :=
-FOREIGN_EXT := .so
-SWIPL_PATH := $(shell command -v $(SWIPL) 2>/dev/null)
-SWIPL_LD_PATH := $(shell command -v $(SWIPL_LD) 2>/dev/null)
-PROLOG_TOOLS_AVAILABLE := $(and $(strip $(SWIPL_PATH)),$(strip $(SWIPL_LD_PATH)))
+PIC := -fPIC
+SHARED := -shared
+# bind every core symbol at load time: an old core without the ABI v1
+# symbols makes use_foreign_library/1 fail with "undefined symbol"
+LINK_EXTRA := -Wl,-z,now $(if $(POLYCALL_LIBDIR),-Wl$(comma)-rpath$(comma)$(POLYCALL_LIBDIR))
 endif
 
-NATIVE_TEST_BIN := $(NATIVE_TEST_BIN)$(EXE_EXT)
-
-.DEFAULT_GOAL := all
+FOREIGN := lib/prolog_polycall.$(SOEXT)
 
 .PHONY: all
-all: $(STATIC_LIB)
+all: $(FOREIGN)
 
-$(BUILD_DIR) $(LIB_DIR):
-ifeq ($(OS),Windows_NT)
-	@if not exist "$@" mkdir "$@"
-else
-	@mkdir -p $@
-endif
+.PHONY: check-deps
+check-deps:
+	@test -n "$(PLBASE)" || { echo "swipl not found (install SWI-Prolog >= 9)"; exit 2; }
+	@$(PKG_CONFIG) --exists polycall || { echo "polycall.pc not found (install the Polycall core >= 1.1.0 or set PKG_CONFIG_PATH)"; exit 2; }
 
-$(ADAPTER_OBJ): src/prolog_polycall.c include/prolog_polycall.h generated/polycall/polycall_ffi.h | $(BUILD_DIR)
-	$(CC) $(CPPFLAGS) $(CFLAGS) -MMD -MP -c $< -o $@
-
-$(STATIC_LIB): $(ADAPTER_OBJ) | $(LIB_DIR)
-	$(AR) rcs $@ $^
-
-$(NATIVE_TEST_BIN): src/prolog_polycall.c tests/polycall_ffi_mock.c tests/prolog_polycall_adapter_test.c | $(BUILD_DIR)
-	$(CC) $(CPPFLAGS) -Itests $(CFLAGS) $^ -o $@
+$(FOREIGN): src/prolog_polycall.c | check-deps
+	@mkdir -p $(dir $@)
+	$(CC) $(WARN) $(CFLAGS) $(PIC) $(SWI_CFLAGS) $(POLYCALL_CFLAGS) $(SHARED) \
+		src/prolog_polycall.c -o $@ $(POLYCALL_LIBS) $(LINK_EXTRA) $(LDFLAGS)
 
 .PHONY: test
-test: $(NATIVE_TEST_BIN)
-	$(NATIVE_TEST_BIN)
-
-.PHONY: foreign
-foreign: | $(LIB_DIR)
-ifeq ($(OS),Windows_NT)
-	@if "$(strip $(POLYCALL_LDFLAGS))"=="" (echo Set POLYCALL_LDFLAGS to the libpolycall linker flags & exit /b 2)
-else
-	@test -n "$(POLYCALL_LDFLAGS)" || (echo "Set POLYCALL_LDFLAGS to the libpolycall linker flags" && exit 2)
-endif
-ifeq ($(OS),Windows_NT)
-	$(CC) $(CPPFLAGS) -I"$(SWI_INCLUDE)" $(FOREIGN_CFLAGS) -shared \
-		src/prolog_polycall_foreign.c src/prolog_polycall.c \
-		-L"$(SWI_LIB_DIR)" -lswipl $(POLYCALL_LDFLAGS) \
-		-o $(LIB_DIR)/prolog_polycall$(FOREIGN_EXT)
-else
-	$(SWIPL_LD) -shared -o $(LIB_DIR)/prolog_polycall $(CPPFLAGS) \
-		src/prolog_polycall_foreign.c src/prolog_polycall.c $(POLYCALL_LDFLAGS)
-endif
-
-.PHONY: test-prolog
-test-prolog: | $(BUILD_DIR)
-ifeq ($(OS),Windows_NT)
-	$(CC) $(CPPFLAGS) -Itests -I"$(SWI_INCLUDE)" $(FOREIGN_CFLAGS) -shared \
-		src/prolog_polycall_foreign.c src/prolog_polycall.c \
-		tests/polycall_ffi_mock.c -L"$(SWI_LIB_DIR)" -lswipl \
-		-o $(BUILD_DIR)/prolog_polycall$(FOREIGN_EXT)
-else
-	$(SWIPL_LD) -shared -o $(BUILD_DIR)/prolog_polycall $(CPPFLAGS) -Itests \
-		src/prolog_polycall_foreign.c src/prolog_polycall.c \
-		tests/polycall_ffi_mock.c
-endif
-	$(SWIPL) -q -p foreign=$(BUILD_DIR) -s tests/prolog_polycall_tests.pl \
-		-g run_tests -t halt
-
-.PHONY: test-prolog-if-available
-ifneq ($(PROLOG_TOOLS_AVAILABLE),)
-test-prolog-if-available: test-prolog
-else
-test-prolog-if-available:
-	@echo SWI-Prolog toolchain not found; skipping Prolog foreign-interface test
-endif
-
-.PHONY: verify-dry
-verify-dry:
-ifeq ($(OS),Windows_NT)
-	powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify-dry.ps1
-else
-	sh scripts/verify-dry.sh
-endif
+test:
+	sh tests/run-real-core.sh
 
 .PHONY: clean
 clean:
-ifeq ($(OS),Windows_NT)
-	@if exist "$(BUILD_DIR)" rmdir /s /q "$(BUILD_DIR)"
-	@if exist "$(LIB_DIR)" rmdir /s /q "$(LIB_DIR)"
-else
-	rm -rf $(BUILD_DIR) $(LIB_DIR)
-endif
-
--include $(ADAPTER_OBJ:.o=.d)
+	rm -rf build lib

@@ -1,5 +1,6 @@
 # Build output
 
-`npm run build:prolog` writes the platform-specific SWI-Prolog foreign library
-to `lib/`. Compiled libraries are excluded from npm because they depend on the
-operating system, architecture, SWI-Prolog ABI, and libpolycall build.
+`make` writes the platform-specific SWI-Prolog foreign library to
+`lib/prolog_polycall.so` (load it with `swipl -p foreign=lib`). Compiled
+libraries are not committed or packed: they depend on the OS, architecture,
+SWI-Prolog ABI and libpolycall build.

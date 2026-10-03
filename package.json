@@ -1,31 +1,25 @@
 {
   "name": "@obinexusltd/prolog-polycall",
-  "version": "1.0.0",
-  "description": "SWI-Prolog source binding for libpolycall 1.5",
+  "version": "1.1.0",
+  "description": "SWI-Prolog foreign library for the Polycall binding ABI v1 (libpolycall >= 1.1.0): config validation, RPC calls and peer nodes",
   "main": "index.js",
   "type": "commonjs",
   "exports": {
     ".": "./index.js",
     "./package.json": "./package.json",
     "./src/*": "./src/*",
-    "./include/*": "./include/*",
-    "./generated/*": "./generated/*",
     "./dist/*": "./dist/*",
     "./examples/*": "./examples/*",
     "./tests/*": "./tests/*",
-    "./scripts/*": "./scripts/*",
     "./config": "./prolog-polycallrc",
     "./manifest": "./polycall-binding.json"
   },
   "files": [
     "index.js",
     "src/",
-    "include/",
-    "generated/",
     "dist/",
     "examples/",
     "tests/",
-    "scripts/",
     "Makefile",
     "prolog-polycallrc",
     "polycall-binding.json",
@@ -36,39 +30,33 @@
   "directories": {
     "lib": "src",
     "src": "src",
-    "include": "include",
-    "generated": "generated",
     "dist": "dist",
     "example": "examples",
-    "test": "tests",
-    "scripts": "scripts"
+    "test": "tests"
   },
   "scripts": {
     "build": "make",
-    "build:prolog": "make foreign",
-    "test": "make test && make test-prolog-if-available && npm run verify:dry && npm run test:package",
-    "test:prolog": "make test-prolog",
+    "test": "node tests/package.test.js && sh tests/run-real-core.sh",
     "test:package": "node tests/package.test.js",
-    "verify:dry": "make verify-dry",
-    "verify": "npm test",
-    "prepack": "npm test"
+    "test:prolog": "sh tests/run-real-core.sh",
+    "prepack": "node tests/package.test.js"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/obinexus/prolog-polycall.git"
   },
   "keywords": [
-    "libpolycall",
     "polycall",
+    "libpolycall",
     "prolog",
     "swi-prolog",
-    "ffi"
+    "foreign-interface",
+    "peer-to-peer"
   ],
   "author": "Nnamdi Michael Okpala <okpalan@protonmail.com>",
   "license": "MIT",
   "engines": {
-    "node": ">=18",
-    "npm": ">=9"
+    "node": ">=18"
   },
   "publishConfig": {
     "access": "public"

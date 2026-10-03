@@ -1,13 +1,11 @@
 # TODO — prolog-polycall
 
-Status: implemented SWI-Prolog source adapter for libpolycall 1.5.
+Status: SWI-Prolog foreign library over the Polycall binding ABI v1 (libpolycall >= 1.1.0).
 
-- [x] Exact thin shim over `polycall_ffi_run_config(config_path, 1)`
-- [x] SWI-Prolog foreign predicate with UTF-8 path marshalling
-- [x] Raw-status and structured-error Prolog APIs
-- [x] Native mock contract test and PL-Unit foreign-interface test
-- [x] npm public-package metadata and relative directory index
-- [x] Updated README and MIT license
-- [ ] Install SWI-Prolog and execute `npm run test:prolog` locally
-- [ ] Run the example against a built libpolycall shared core
-- [ ] Publish `@obinexusltd/prolog-polycall` publicly on npm
+- [x] `src/prolog_polycall.c` includes the real `<polycall.h>`; linked via pkg-config, `-z now`
+- [x] `run_config/2` keeps `polycall_ffi_run_config(Path, 1)`; `polycall_call/6`; `peer_*`
+- [x] `error(polycall_error(Status, Name, Detail), _)`; ABI mismatch gate
+- [x] PlUnit suite against the real core (Linux, swipl 10.1.16) incl. interop with the C CLI peer
+- [ ] Windows build (MinGW + libswipl) and run
+- [ ] Optionally package as an SWI-Prolog pack (pack.pl + prolog/)
+- [ ] Publish `@obinexusltd/prolog-polycall`

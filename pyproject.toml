@@ -1,0 +1,15 @@
+# QA descriptor for the Polycall binding matrix (read by polycall/qa/run_qa.py).
+# This repository is NOT a Python package and is not pip-installable;
+# its native manifest is Makefile + src/prolog_polycall.pl (npm distribution: package.json).
+[tool.polycall.binding]
+name = "prolog-polycall"
+language = "Prolog"
+native_manifest = "Makefile"
+registry = "npm"
+package = "@obinexusltd/prolog-polycall"
+abi = 1
+support = "supported"
+linux_image = "swipl:latest (SWI-Prolog 10.1.16, + make gcc pkg-config; core via build-linux-core.sh)"
+build = "make"
+test = "sh tests/run-real-core.sh"
+windows_test = ""
