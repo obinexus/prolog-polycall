@@ -217,6 +217,20 @@ test(invalid_input) :-
     status_of(polycall_call(EP, debug, echo, '{}', 0, _), -1),
     status_of(polycall_call('no-port', debug, echo, '', 1000, _), -1).
 
+test(against_a_polycall_daemon) :-
+    env('POLYCALL_TEST_DAEMON_ENDPOINT', EP),
+    polycall_call(EP, inventory, get, '{"item_id":"widget-a"}', 2000, Out),
+    assertion(Out == "{\"item_id\":\"widget-a\",\"quantity\":42,\"in_stock\":true}"),
+    status_of(polycall_call(EP, inventory, teleport, '{}', 2000, _), -7),
+    error_of(polycall_call(EP, inventory, get, '{"item_id":"nope"}', 2000, _), polycall_error(-9, _, _, Obj)),
+    assertion(sub_string(Obj, _, _, _, "item.unknown")),
+    status_of(polycall_call(EP, debug, sleep, '{"ms":2000}', 150, _), -4),
+    tmp('daemon/state', State), tmp('daemon/Polycallfile', PF),
+    env('POLYCALL_CLI', Cli),
+    process_create(Cli, [daemon, status, '--state-dir', State, PF], [stdout(pipe(O)), stderr(null), process(Pid)]),
+    read_string(O, _, S), close(O), process_wait(Pid, exit(Code)),
+    assertion(Code == 0), assertion(sub_string(S, _, _, _, EP)).
+
 test(no_runtime) :-
     status_of(polycall_call('127.0.0.1:1', inventory, get, '{}', 1000, _), -5).
 
