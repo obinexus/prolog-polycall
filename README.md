@@ -28,6 +28,24 @@ whose `polycall_ffi_abi_version()` is not 1 is reported when the module loads
 and every API predicate then throws
 `polycall_error(-15, 'POLYCALL_E_UNSUPPORTED', ...)` — it is never used.
 
+On Windows (MSYS2 UCRT64 / MinGW-w64 GCC with GNU make), the Makefile's
+`Windows_NT` branch builds `lib/prolog_polycall.dll`, linking `libswipl`
+from the SWI-Prolog installation (`PLBASE/bin`) and the core's import library
+through pkg-config, e.g. the UCRT64 core (`libpolycall.dll`,
+`lib/libpolycall.dll.a`, `lib/pkgconfig/polycall.pc`):
+
+```sh
+export PKG_CONFIG_PATH=/c/polycall/lib/pkgconfig    # the core's prefix
+make SWIPL="/c/Program Files/swipl/bin/swipl.exe"
+PATH="/c/polycall/bin:$PATH" swipl -p foreign=lib examples/basic.pl prolog-polycallrc
+```
+
+A DLL resolves its imports when it is loaded, so a missing core or a 1.0
+core without the ABI v1 symbols makes `use_foreign_library/1` fail there
+too. QA status: built and tested on Linux x86_64 (SWI-Prolog 10.1.16 and
+9.0.4); the Windows and macOS (`Darwin`) branches are implemented but have
+not been run in QA yet (no SWI-Prolog on the Windows QA host, no macOS host).
+
 ## API (module `prolog_polycall`)
 
 ```prolog
@@ -64,7 +82,18 @@ error object (`polycall_error(Status, Name, Detail, Output)`), and a
 `peer_recv/4` with a too-small capacity throws
 `polycall_error(-10, 'POLYCALL_E_TOO_LARGE', Detail, needed(Bytes))` and leaves
 the message queued. A `peer_recv` blocked in one thread is woken by
-`peer_cancel/1` or `peer_close/1` from another.
+`peer_cancel/1` or `peer_close/1` from another; other Prolog threads keep
+running while one is blocked in the core, but the blocked thread handles
+`thread_signal/2` (e.g. an abort) only after the call returns.
+
+Arguments are checked before they reach C, with standard Prolog errors:
+timeouts must be integers in 0..4294967295 or `infinite`
+(`domain_error(polycall_timeout_ms, T)`, `type_error(integer, T)`), handles
+must fit `int32` (`domain_error(polycall_handle, H)`), a `peer_recv/4`
+capacity must be `>= 0` (`domain_error(polycall_capacity, C)`; capacities
+above the 1 MiB message limit are clamped, never allocated), and text
+arguments (paths, ids, endpoints, JSON, tokens) must not contain code 0,
+which would reach C silently truncated (`domain_error(polycall_text, T)`).
 
 Changed in 1.1.0: errors were `polycall_error(Status)`; they now carry the
 name and detail.
@@ -78,13 +107,22 @@ processes, `run_config`, `polycall_call` against a live `polycall start`
 runtime, two nodes both directions, payload matrix (empty, UTF-8, binary +
 NUL, 1 MiB, 1 MiB + 1), registry ownership, de-duplication, auth, dead peers,
 timeouts, small buffers, cancel and close waking blocked receivers (threads),
-handle lifecycle, 8 concurrent sender threads, and interop with a
-`polycall peer serve` C node. A missing swipl, make, pkg-config or core is
-reported as SKIP (exit 77), never as success.
+handle lifecycle, 8 concurrent sender threads, argument bounds (timeouts,
+capacities, handles, NUL in text), a non-ASCII configuration path, and
+interop with a `polycall peer serve` C node. A missing swipl, make,
+pkg-config or core is reported as SKIP (exit 77), never as success; the run
+fails unless every test ran and passed.
 
 ```sh
-sh tests/run-real-core.sh     # core in /opt/polycall, or POLYCALL_PREFIX / POLYCALL_LIBRARY
+sh tests/run-real-core.sh            # core in /opt/polycall, or POLYCALL_PREFIX / POLYCALL_LIBRARY
+sh tests/run-memcheck.sh asan        # the foreign library under ASan + UBSan
+sh tests/run-memcheck.sh valgrind    # the whole suite under valgrind memcheck
 ```
+
+The ASan run preloads the sanitizer runtime into `swipl` with
+`use_sigaltstack=0`: SWI-Prolog installs its own alternate signal stack per
+thread, and ASan's default would try to unmap that buffer when the thread
+exits (an ASan CHECK failure that is not a defect in this code).
 
 ## License
 

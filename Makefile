@@ -16,7 +16,7 @@ SWIPL ?= swipl
 
 PLBASE := $(shell $(SWIPL) --dump-runtime-variables 2>/dev/null | sed -n 's/^PLBASE="\(.*\)";$$/\1/p')
 SOEXT := $(or $(shell $(SWIPL) --dump-runtime-variables 2>/dev/null | sed -n 's/^PLSOEXT="\(.*\)";$$/\1/p'),so)
-SWI_CFLAGS ?= -I$(PLBASE)/include
+SWI_CFLAGS ?= -I"$(PLBASE)/include"
 
 POLYCALL_CFLAGS ?= $(shell $(PKG_CONFIG) --cflags polycall)
 POLYCALL_LIBS ?= $(shell $(PKG_CONFIG) --libs polycall)
@@ -30,7 +30,7 @@ ifeq ($(OS),Windows_NT)
 PIC :=
 SHARED := -shared
 # Windows foreign libraries must link libswipl explicitly
-LINK_EXTRA := -L$(PLBASE)/bin -lswipl
+LINK_EXTRA := -L"$(PLBASE)/bin" -lswipl
 else ifeq ($(UNAME_S),Darwin)
 PIC := -fPIC
 SHARED := -bundle -undefined dynamic_lookup
