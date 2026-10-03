@@ -21,7 +21,9 @@ command -v pkg-config >/dev/null 2>&1 || { echo "SKIP: pkg-config not found"; ex
 . tests/real-core-env.sh
 pkg-config --exists polycall || pc_skip "polycall.pc not found (PKG_CONFIG_PATH)"
 
-make SWIPL="$SWIPL" || { echo "FAIL: build"; exit 1; }
+# always rebuild: a lib/ left over from another SWI-Prolog version would
+# otherwise be loaded as is (foreign ABI mismatch)
+make -B SWIPL="$SWIPL" || { echo "FAIL: build"; exit 1; }
 # a second build without RUNPATH, for the "core missing" check
 make SWIPL="$SWIPL" FOREIGN="$POLYCALL_TEST_TMP/norpath/prolog_polycall.so" POLYCALL_LIBDIR= >/dev/null \
   || { echo "FAIL: norpath build"; exit 1; }
