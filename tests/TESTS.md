@@ -24,4 +24,8 @@
   `run_polycall_tests` exits 77 without the runner environment and 1 unless
   every test ran and passed.
 - `fixtures/fake_polycall.c` — loader-failure fixture only (old core, ABI 2).
+- `run-package.sh` — `npm pack` (no compiled objects allowed), the tarball
+  installed into a clean npm project, the JS entry point loaded, the foreign
+  library built from the INSTALLED package with its Makefile, and the
+  packaged examples plus a `polycall_call` run against the real core.
 - `package.test.js` — npm / binding-manifest metadata (no Prolog).
