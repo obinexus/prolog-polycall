@@ -56,7 +56,7 @@ function resolve(directoryName, ...segments) {
 }
 
 module.exports = Object.freeze({
-  packageName: '@obinexusltd/prolog-polycall',
+  packageName: 'prolog-polycall',
   projectRoot: __dirname,
   directories,
   resolve,

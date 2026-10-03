@@ -1,5 +1,5 @@
 {
-  "name": "@obinexusltd/prolog-polycall",
+  "name": "prolog-polycall",
   "version": "1.1.0",
   "description": "SWI-Prolog foreign library for the Polycall binding ABI v1 (libpolycall >= 1.1.0): config validation, RPC calls and peer nodes",
   "main": "index.js",

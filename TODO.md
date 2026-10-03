@@ -10,4 +10,4 @@ Status: SWI-Prolog foreign library over the Polycall binding ABI v1 (libpolycall
 - [x] ASan + UBSan and valgrind memcheck runs of the suite (tests/run-memcheck.sh)
 - [ ] Windows build (MinGW + libswipl) and run
 - [ ] Optionally package as an SWI-Prolog pack (pack.pl + prolog/)
-- [ ] Publish `@obinexusltd/prolog-polycall`
+- [ ] Publish `prolog-polycall`

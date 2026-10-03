@@ -13,7 +13,7 @@ const manifest = require('../polycall-binding.json');
 
 const repo = 'https://github.com/obinexus/prolog-polycall';
 
-assert.equal(metadata.name, '@obinexusltd/prolog-polycall');
+assert.equal(metadata.name, 'prolog-polycall');
 assert.equal(metadata.license, 'MIT');
 assert.equal(metadata.publishConfig.access, 'public');
 assert.equal(metadata.repository.url, `git+${repo}.git`);

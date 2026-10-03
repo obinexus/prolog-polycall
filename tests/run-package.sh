@@ -27,10 +27,10 @@ fi
 NPROJ="$POLYCALL_TEST_TMP/npm-project"
 mkdir -p "$NPROJ"
 (cd "$NPROJ" && npm init -y >/dev/null && npm install --no-audit --no-fund "$PACKDIR/$TARBALL") || fail "npm install"
-PKG="$NPROJ/node_modules/@obinexusltd/prolog-polycall"
+PKG="$NPROJ/node_modules/prolog-polycall"
 (cd "$NPROJ" && node -e '
-const b = require("@obinexusltd/prolog-polycall");
-if (b.packageName !== "@obinexusltd/prolog-polycall") process.exit(1);
+const b = require("prolog-polycall");
+if (b.packageName !== "prolog-polycall") process.exit(1);
 for (const f of [b.prologModule, b.foreignSource, b.makefile, b.config]) require("fs").accessSync(f);
 console.log("npm entry point:", b.prologModule);') || fail "npm entry point"
 

@@ -3,7 +3,7 @@
 SWI-Prolog binding for the [Polycall](https://github.com/obinexus/polycall)
 core's **binding ABI v1** (`polycall.h`, libpolycall >= 1.1.0): configuration
 validation, `polycall_rpc` calls and peer-to-peer nodes. npm source
-distribution `@obinexusltd/prolog-polycall` (not published yet).
+distribution `prolog-polycall` (not published yet).
 
 `src/prolog_polycall.c` is a SWI-Prolog foreign library that includes the
 real `<polycall.h>` and links the core through pkg-config;

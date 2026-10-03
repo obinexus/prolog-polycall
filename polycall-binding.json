@@ -1,7 +1,7 @@
 {
   "name": "prolog-polycall",
   "version": "1.1.0",
-  "package": "@obinexusltd/prolog-polycall",
+  "package": "prolog-polycall",
   "language": "Prolog",
   "dialect": "SWI-Prolog >= 9",
   "adapter": true,
