@@ -5,10 +5,10 @@
 
         swipl -p foreign=lib -g run_polycall_tests -t halt tests/prolog_polycall_tests.pl
 
-    Without those variables every test is skipped (condition(realcore)),
-    never passed.
+    Without those variables run_polycall_tests exits 77 (SKIP), never 0.
 */
 
+:- encoding(utf8).
 :- use_module('../src/prolog_polycall').
 :- use_module(library(plunit)).
 :- use_module(library(process)).
@@ -444,7 +444,7 @@ test(prolog_peer_and_cli_peer_exchange_both_ways) :-
           assertion(sub_string(Out2, _, _, _, "\"prolog-dup-1\"")),
           cli([peer, recv, '--to', CEP, '-t', 300], 6, _),
           peer_close(H) ),
-        process_kill(CPid)).
+        ( process_kill(CPid), process_wait(CPid, _) )).
 
 string_reverse(S, R) :- string_codes(S, Cs), reverse(Cs, Rs), string_codes(R, Rs).
 
@@ -466,9 +466,112 @@ test(call_matches_the_cli_client) :-
 
 :- end_tests(interop).
 
-%   Entry point for the runner: exit status 1 on any failure.
+% ---- boundaries: integers, NUL in text, Unicode paths ------------------------------------
+
+domain_of(Goal, Domain) :-
+    catch(( call(Goal), Domain = none ), error(domain_error(Domain, _), _), true).
+type_of(Goal, Type) :-
+    catch(( call(Goal), Type = none ), error(type_error(Type, _), _), true).
+
+:- begin_tests(boundaries, [condition(realcore)]).
+
+test(timeouts_outside_uint32_are_domain_errors) :-
+    rpc(RPC),
+    peer_open(alpha, "127.0.0.1:0", '', A), peer_endpoint(A, EA),
+    forall(member(Bad, [-1, 4294967296, 18446744073709551616]),
+           ( domain_of(peer_recv(A, Bad, _), D1), assertion(D1 == polycall_timeout_ms),
+             domain_of(peer_ping(A, EA, Bad), D2), assertion(D2 == polycall_timeout_ms),
+             domain_of(peer_send(A, EA, "x", '', Bad), D3), assertion(D3 == polycall_timeout_ms),
+             domain_of(polycall_call(RPC, debug, echo, '', Bad, _), D4), assertion(D4 == polycall_timeout_ms) )),
+    type_of(peer_recv(A, 1.5, _), T1), assertion(T1 == integer),
+    type_of(peer_recv(A, forever, _), T2), assertion(T2 == integer),
+    polycall_call(RPC, debug, echo, '1', 600000, Out), assertion(Out == "{\"echo\":1}"),
+    status_of(polycall_call(RPC, debug, echo, '1', 600001, _), -1),
+    status_of(peer_recv(A, 0, _), -4),
+    peer_ping(A, EA, infinite), peer_ping(A, EA, 4294967295),
+    peer_close(A).
+
+test(receive_capacity_bounds) :-
+    with_peers([alpha, beta], [[A, B]]>>(
+        peer_endpoint(B, EB),
+        length(Cs, 4096), maplist(=(0'A), Cs), string_codes(Four, Cs),
+        peer_send(A, EB, Four, 'cap-1', 3000),
+        domain_of(peer_recv(B, 2000, -1, _), D), assertion(D == polycall_capacity),
+        error_of(peer_recv(B, 2000, 0, _), polycall_error(-10, _, _, needed(N0))), assertion(N0 == 4096),
+        peer_recv(B, 0, 4096, message(_, _, Got)), assertion(Got == Four),
+        length(Ms, 1048576), maplist(=(0xA5), Ms), string_codes(Max, Ms),
+        peer_send(A, EB, Max, 'cap-2', 10000),
+        peer_recv(B, 5000, 1099511627776, message(_, _, M2)), assertion(M2 == Max),
+        peer_send(A, EB, Max, 'cap-3', 10000),
+        error_of(peer_recv(B, 5000, 1048575, _), polycall_error(-10, _, _, needed(N1))),
+        assertion(N1 == 1048576),
+        peer_recv(B, 0, 1048576, message(_, _, M3)), assertion(M3 == Max))).
+
+test(handles_outside_int32_are_domain_errors) :-
+    forall(member(Bad, [2147483648, -2147483649, 9223372036854775808]),
+           ( domain_of(peer_endpoint(Bad, _), D), assertion(D == polycall_handle) )),
+    status_of(peer_endpoint(-2147483648, _), -3).
+
+test(text_with_nul_is_refused_not_truncated) :-
+    rpc(RPC),
+    env('PROLOG_POLYCALL_REPO', Repo), atomic_list_concat([Repo, '/prolog-polycallrc'], Rc),
+    atom_concat(Rc, '\u0000.ignored', RcNul),
+    domain_of(run_config(RcNul, _), D1), assertion(D1 == polycall_text),
+    domain_of(polycall_describe(RcNul, _), D2), assertion(D2 == polycall_text),
+    domain_of(peer_open('al\u0000pha', "127.0.0.1:0", '', _), D3), assertion(D3 == polycall_text),
+    domain_of(polycall_call(RPC, debug, echo, '1\u0000', 1000, _), D4), assertion(D4 == polycall_text),
+    peer_open(alpha, "127.0.0.1:0", '', A), peer_endpoint(A, EA),
+    domain_of(peer_register(A, 'beta\u0000x', EA), D5), assertion(D5 == polycall_text),
+    atom_concat(EA, '\u0000junk', EANul),
+    domain_of(peer_send(A, EANul, "x", '', 1000), D6), assertion(D6 == polycall_text),
+    domain_of(peer_send(A, EA, "x", 'id\u0000x', 1000), D7), assertion(D7 == polycall_text),
+    peer_list(A, []),
+    peer_send(A, EA, "pay\u0000load\u0000", 'nul-payload', 2000),
+    take(A, R), assertion(R == "alpha"-"nul-payload"-"pay\u0000load\u0000"),
+    peer_close(A).
+
+test(non_ascii_config_path) :-
+    tmp('配置 é ü – Ω', Dir), make_directory_path(Dir),
+    atomic_list_concat([Dir, '/prolog-polycallrc-ñ'], P),
+    setup_call_cleanup(open(P, write, S, [encoding(utf8)]),
+                       format(S, "log_level=info~nmax_connections=8~ntls_enabled=false~n", []),
+                       close(S)),
+    run_config(P, 0), run_config(P, false, 0),
+    polycall_describe(P, J), assertion(sub_string(J, _, _, _, "max_connections")),
+    atomic_list_concat([Dir, '/bad-ü'], Bad),
+    setup_call_cleanup(open(Bad, write, S2, [encoding(utf8)]), format(S2, "max_connections=many~n", []), close(S2)),
+    error_of(run_config_or_throw(Bad), polycall_error(-13, 'POLYCALL_E_CONFIG', Detail)),
+    assertion(sub_string(Detail, _, _, _, "max_connections")),
+    atomic_list_concat([Dir, '/missing-ñ'], Missing),
+    run_config(Missing, -7).
+
+:- end_tests(boundaries).
+
+%   Entry point for the runner. Without the environment of
+%   tests/run-real-core.sh nothing can run: exit 77 (SKIP), never success.
+%   Otherwise exit 1 unless every test ran and passed.
 run_polycall_tests :-
-    (   run_tests
+    (   realcore
     ->  true
-    ;   halt(1)
+    ;   format(user_error, "SKIP: run through tests/run-real-core.sh (no real-core environment)~n", []),
+        halt(77)
+    ),
+    (   predicate_property(plunit:run_tests(_, _), defined)
+    ->  % SWI-Prolog >= 9.1: check the summary counts
+        (   catch(plunit:run_tests(all, [summary(S)]), E, (print_message(error, E), fail))
+        ->  true
+        ;   halt(1)
+        ),
+        format("plunit summary: ~p~n", [S]),
+        (   S.total > 0, S.failed =:= 0, S.blocked =:= 0, S.timeout =:= 0, S.passed =:= S.total
+        ->  true
+        ;   format(user_error, "FAIL: not every test ran and passed~n", []),
+            halt(1)
+        )
+    ;   % SWI-Prolog 9.0: run_tests/0 fails on any failed test; realcore
+        % holds (checked above), so no unit is skipped by its condition
+        (   run_tests
+        ->  true
+        ;   halt(1)
+        )
     ).

@@ -1,8 +1,21 @@
 # Adapter boundary
 
-`prolog_polycall.pl` calls one SWI-Prolog foreign predicate. The foreign stub
-marshals an atom or string as UTF-8, and `prolog_polycall_run_config()` makes
-exactly one call to `polycall_ffi_run_config(config_path, 1)`. The core status
-is unified unchanged with the Prolog result.
+`prolog_polycall.pl` is the Prolog API; `prolog_polycall.c` is a SWI-Prolog
+foreign library that includes the real `<polycall.h>` and only marshals
+terms to C and back:
 
-This package contains no configuration parser or runtime implementation.
+- text (paths, ids, endpoints, JSON, tokens): UTF-8, refused when it contains
+  code 0 (it would reach C truncated);
+- payloads: octets (chars 0..255, binary-safe) or `utf8(Text)`;
+- handles: `int32`; timeouts: `uint32` milliseconds or `infinite`;
+- outputs: caller-owned buffers sized per `polycall.h` (the library never
+  returns memory to free).
+
+Each foreign predicate makes one core call and returns its status unchanged;
+the Prolog layer turns a non-zero status into
+`error(polycall_error(Status, Name, Detail), _)` after reading
+`polycall_last_error` on the same thread. `run_config/2` is exactly
+`polycall_ffi_run_config(Path, 1)`.
+
+This package contains no configuration parser, wire protocol or peer
+transport: those stay in libpolycall.

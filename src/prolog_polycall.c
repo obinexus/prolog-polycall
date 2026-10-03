@@ -27,25 +27,40 @@
 
 #define TEXT_FLAGS (CVT_ATOM | CVT_STRING | CVT_LIST | REP_UTF8 | BUF_STACK | CVT_EXCEPTION)
 
+/* NUL-terminated UTF-8 text. A Prolog text may contain code 0, which would
+ * reach C silently truncated ('rc\0junk' validated 'rc'): refuse it with
+ * domain_error(polycall_text, Text). */
 static int get_text(term_t t, char **out)
 {
-    return PL_get_chars(t, out, TEXT_FLAGS);
+    size_t len = 0;
+    if (!PL_get_nchars(t, &len, out, TEXT_FLAGS)) return FALSE;
+    if (memchr(*out, '\0', len)) return PL_domain_error("polycall_text", t);
+    return TRUE;
 }
 
 /* '' -> NULL */
 static int get_opt_text(term_t t, const char **out)
 {
     char *s = NULL;
-    if (!PL_get_chars(t, &s, TEXT_FLAGS)) return FALSE;
+    if (!get_text(t, &s)) return FALSE;
     *out = *s ? s : NULL;
     return TRUE;
+}
+
+/* An integer in lo..hi. Out of range -- including integers too big for
+ * int64 (bignums) -- is domain_error(Domain, T); a non-integer is
+ * type_error(integer, T). */
+static int get_int_in(term_t t, int64_t lo, int64_t hi, const char *domain, int64_t *v)
+{
+    if (PL_get_int64(t, v)) return (*v < lo || *v > hi) ? PL_domain_error(domain, t) : TRUE;
+    if (PL_is_integer(t)) return PL_domain_error(domain, t);
+    return PL_type_error("integer", t);
 }
 
 static int get_handle(term_t t, polycall_peer_t *h)
 {
     int64_t v;
-    if (!PL_get_int64_ex(t, &v)) return FALSE;
-    if (v < INT32_MIN || v > INT32_MAX) return PL_domain_error("polycall_handle", t);
+    if (!get_int_in(t, INT32_MIN, INT32_MAX, "polycall_handle", &v)) return FALSE;
     *h = (polycall_peer_t)v;
     return TRUE;
 }
@@ -58,16 +73,17 @@ static int get_timeout(term_t t, uint32_t *ms)
         *ms = UINT32_MAX;
         return TRUE;
     }
-    if (!PL_get_int64_ex(t, &v)) return FALSE;
-    if (v < 0 || v > (int64_t)UINT32_MAX) return PL_domain_error("polycall_timeout_ms", t);
+    if (!get_int_in(t, 0, (int64_t)UINT32_MAX, "polycall_timeout_ms", &v)) return FALSE;
     *ms = (uint32_t)v;
     return TRUE;
 }
 
+static functor_t FUNCTOR_utf8_1; /* utf8/1, created once in install_prolog_polycall() */
+
 /* payload: utf8(Text) -> UTF-8 bytes; otherwise octets (chars 0..255) */
 static int get_payload(term_t t, char **data, size_t *len)
 {
-    if (PL_is_functor(t, PL_new_functor(PL_new_atom("utf8"), 1))) {
+    if (PL_is_functor(t, FUNCTOR_utf8_1)) {
         term_t a = PL_new_term_ref();
         _PL_get_arg(1, t, a);
         return PL_get_nchars(a, len, data, CVT_ATOM | CVT_STRING | CVT_LIST | REP_UTF8 |
@@ -306,9 +322,12 @@ static foreign_t pc_peer_recv(term_t handle, term_t to, term_t capacity, term_t 
     char s[POLYCALL_PEER_ID_MAX], m[POLYCALL_MESSAGE_ID_MAX];
     char *buf;
     int rc, ok;
-    if (!get_handle(handle, &h) || !get_timeout(to, &ms) || !PL_get_int64_ex(capacity, &cap64)) return FALSE;
-    if (cap64 < 0 || cap64 > (int64_t)(64u << 20)) return PL_domain_error("polycall_capacity", capacity);
-    cap = (size_t)cap64;
+    if (!get_handle(handle, &h) || !get_timeout(to, &ms) ||
+        !get_int_in(capacity, 0, INT64_MAX, "polycall_capacity", &cap64)) {
+        return FALSE;
+    }
+    /* no message exceeds POLYCALL_PEER_MAX_PAYLOAD: clamp, never allocate more */
+    cap = cap64 > (int64_t)POLYCALL_PEER_MAX_PAYLOAD ? (size_t)POLYCALL_PEER_MAX_PAYLOAD : (size_t)cap64;
     buf = (char *)malloc(cap ? cap : 1);
     if (!buf) return PL_resource_error("memory");
     s[0] = m[0] = '\0';
@@ -328,6 +347,7 @@ static foreign_t pc_peer_recv(term_t handle, term_t to, term_t capacity, term_t 
 
 install_t install_prolog_polycall(void)
 {
+    FUNCTOR_utf8_1 = PL_new_functor(PL_new_atom("utf8"), 1);
 #define REG(name, arity, fn) \
     PL_register_foreign_in_module("prolog_polycall", name, arity, (pl_function_t)(fn), 0)
     REG("$polycall_abi_version", 1, pc_abi_version);
